@@ -27,12 +27,17 @@ browserLogger = logging.getLogger('browser')
 
 
 GIFS_PATH = path.get_resource('gifs.json')
+BACKGROUNDS_PATH = path.get_resource('backgrounds.json')
 
 
 # Very bad way of saving state in the backend
 state = {
-    'last_dancer_switch': time.time()
+    'last_dancer_switch': time.time(),
+    'last_bg_switch': time.time()
 }
+
+def read_bgs():
+    bgs = read_json(BACKGROUNDS_PATH)
 
 def main_app(env, start_response):
     """Provides following features:
@@ -52,12 +57,16 @@ def main_app(env, start_response):
     elif request_path == '/gif':
         data = json.loads(get_post_data(env))
         gifs = read_json(GIFS_PATH)
+        bgs = read_json(BACKGROUNDS_PATH)
+        bg = bgs[gifs['bg']]
 
         # Change gif's position in visible gifs
         for i, gif in enumerate(gifs['visible']):
             if gif['id'] == data['id']:
-                gifs['visible'][i]['position'] = data['position']
-                gifs['visible'][i]['height'] = data['height']
+                bg['gifs'][i]['position'] = data['position']
+                bg['gifs'][i]['height'] = data['height']
+                #gifs['visible'][i]['position'] = data['position']
+                #gifs['visible'][i]['height'] = data['height']
 
         # Set gif's possible new size
         gifs['all'][data['id']]['width'] = data['width']
@@ -66,6 +75,7 @@ def main_app(env, start_response):
 
         # Save state to file
         save_json(GIFS_PATH, gifs)
+        save_json(BACKGROUNDS_PATH, bgs)
 
         start_response('200 OK', [])
         return ['']
@@ -93,14 +103,19 @@ def main_app(env, start_response):
     # GET /gifs or /gifs_no_state_change
     elif request_path.startswith('/gifs'):
         gifs = read_json(GIFS_PATH)
+        bgs = read_json(BACKGROUNDS_PATH)
+        bg = bgs[gifs['bg']]
 
         # No state change allowed means that request should not save anything
         # to json state files
         stateChangeAllowed = not request_path.endswith('no_state_change')
         if not stateChangeAllowed:
-            data = format_gifs(gifs)
+            data = format_gifs(bg, gifs)
             start_response('200 OK', [])
             return [json.dumps(data)]
+
+        # Update background (and move around gifs if the bg changes)
+        bg = update_background(gifs)
 
         # Check if there are new gifs
         new_gifs_found = False
@@ -114,13 +129,13 @@ def main_app(env, start_response):
                 gifs['all'][gif_id] = gif_file
                 gifs['all'][gif_id]['modified'] = int(time.time())
 
-                add_new_gif(gifs['visible'], gif_file)
+                add_new_gif(bg, gifs['visible'], gif_file)
                 new_gifs_found = True
 
         # Check if we should switch dancers
-        if (time.time() > state['last_dancer_switch'] + settings['switchDancers'] and
-            not new_gifs_found and
-            gif_files):
+        time_to_switch = time.time() > state['last_dancer_switch'] + settings['switchDancers']
+        empty_slots = len(bg['gifs']) > len(gifs['visible'])
+        if ((time_to_switch or empty_slots) and not new_gifs_found and gif_files):
 
             retries = 50
             nextId = gifs['lastAddedId']
@@ -136,13 +151,13 @@ def main_app(env, start_response):
             nextGif = gifs['all'][nextId]
 
             if retries > 0:
-                logging.info('Cycled dancers. Removed %s and added %s' % (gifs['visible'][0]['id'], nextGif['id']))
-                add_new_gif(gifs['visible'], nextGif)
+                #logging.info('Cycled dancers. Removed %s and added %s' % (gifs['visible'][0]['id'], nextGif['id']))
+                add_new_gif(bg, gifs['visible'], nextGif)
                 state['last_dancer_switch'] = time.time()
 
         save_json(GIFS_PATH, gifs)
         start_response('200 OK', [])
-        return [json.dumps(format_gifs(gifs))]
+        return [json.dumps(format_gifs(bg, gifs))]
 
     elif request_path == '/background':
 
@@ -171,9 +186,25 @@ def read_json(path):
 
 def save_json(path, data, mode='w'):
     f = open(path, mode)
-    f.write(json.dumps(data))
+    f.write(json.dumps(data, indent=2))
     f.close()
 
+
+def update_background(gifs):
+    bgs = read_json(BACKGROUNDS_PATH)
+    bg = bgs[gifs['bg']]
+    if time.time() > state['last_bg_switch'] + bg['duration']:
+        state['last_bg_switch'] = time.time()
+        gifs['bg'] = (gifs['bg'] + 1) % len(bgs)
+        bg = bgs[gifs['bg']]
+
+        # Update dancer positions based on the new bg
+        gifs['visible'] = gifs['visible'][0:len(bg['gifs'])]
+        for i, gif in enumerate(gifs['visible']):
+            gif['position'] = bg['gifs'][i]['position']
+            gif['height'] = bg['gifs'][i]['height']
+
+    return bg
 
 def get_next_dancer_id(gif_files, lastAddedId):
     gif_files_rev = [x for x in reversed(gif_files)]
@@ -194,7 +225,7 @@ def get_next_dancer_id(gif_files, lastAddedId):
 
     return nextId
 
-def add_new_gif(visible_gifs, gif):
+def add_new_gif(bg, visible_gifs, gif):
     """Add new gif to visible gifs, this might push the oldest away
     from visible!
     """
@@ -205,15 +236,20 @@ def add_new_gif(visible_gifs, gif):
         'added': int(time.time())
     }
 
-    if len(visible_gifs) >= settings['maxVisible']:
-        oldest = visible_gifs.pop(0)
+    i = len(visible_gifs)
+    if i >= len(bg['gifs']):
+        oldest = min(visible_gifs, key=lambda x: x['added'])
+        i = visible_gifs.index(oldest)
         logger.info('Popped oldest %s' % oldest['id'])
-        # Take position from the oldest
-        new_gif['position'] = oldest['position']
-        new_gif['height'] = oldest['height']
+    else:
+        visible_gifs.append(new_gif)
 
-    visible_gifs.append(new_gif)
-
+    if i < len(bg['gifs']):
+        # Take position from the background config
+        ref = bg['gifs'][i]
+        new_gif['position'] = ref['position']
+        new_gif['height'] = ref['height']
+    visible_gifs[i] = new_gif
 
 def get_gif_files():
     gif_dir = os.path.abspath(path.get_resource('static/img/gifs'))
@@ -245,8 +281,8 @@ def get_gif_files():
     return sorted_gif_files
 
 
-def format_gifs(gifs):
-    data = {'visible': gifs['visible'], 'all': gifs['all']}
+def format_gifs(bg, gifs):
+    data = {'bg': gifs['bg'], 'background': bg['url'], 'visible': gifs['visible'], 'all': gifs['all']}
     return data
 
 def local_to_utc(t):

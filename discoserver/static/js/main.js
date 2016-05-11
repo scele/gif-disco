@@ -147,6 +147,10 @@ function updateGifs() {
                 updateDisco(gifs);
             }
 
+            if (gifs.background != $('.disco-background').attr('src')) {
+                $('.disco-background').attr('src', gifs.background);
+            }
+
             window.lastFetchTime = unixtime();
         }
     });
@@ -451,9 +455,6 @@ $(window).load(function() {
 
     updateGifs();
     setInterval(updateGifs, 3 * 1000);
-
-    updateBackground();
-    setInterval(updateBackground, 5 * 1000);
 
     // Don't show tweets.
     //fetchTweets(0);
