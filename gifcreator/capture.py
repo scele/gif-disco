@@ -2,10 +2,13 @@
 
 import glob
 import os
+import platform
+import time
 
 import fabric.context_managers as ctx
 from fabric.api import local
-
+from multiprocessing import Pool
+from argparse import ArgumentParser
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_dir)
@@ -34,18 +37,35 @@ settings = {
     # http://www.imagemagick.org/Usage/crop/#crop
     'crop': None, #'200x320+10+0',
 
-    # Use wacaw -L to list available camera inputs. In OS X 0 is usually
+    # On OS X, use "wacaw -L" to list available camera inputs. 0 is usually
     # iSight, and 1 is USB web cam. It might change though.
-    'camera_input': '0'
+    # On Windows, use "ffmpeg -list_devices true -f dshow -i dummy" to list
+    # available camera inputs, and type the name of the desired video device
+    # (e.g. 'Logitech HD Pro Webcam C920') here.
+    'camera_input': 'Logitech HD Pro Webcam C920'
 }
-
+args = {}
 
 def main():
+    parser = ArgumentParser(description='capture camera stream and convert to gif')
+    parser.add_argument('--stream', action='store_true',
+                        help='stream processed video instead of converting to gif')
+    global args
+    args = parser.parse_args()
+
     clean()
+    t0 = time.clock()
     capture_video()
-    split_video_to_frames()
-    remove_green_from_frames()
+    print "Capturing took " + str(time.clock() - t0)
+    #t0 = time.clock()
+    #split_video_to_frames()
+    #print "Splitting video took " + str(time.clock() - t0)
+    #t0 = time.clock()
+    #remove_green_from_frames()
+    #print "Processing frames took " + str(time.clock() - t0)
+    t0 = time.clock()
     create_gif()
+    print "Creating gif took " + str(time.clock() - t0)
 
 
 def clean():
@@ -55,7 +75,41 @@ def clean():
 
 def capture_video():
     w, h = settings['output_size'].split('x')
-    cmd = 'wacaw -d {camera_input} -i {camera_input} --video --duration 4 --width {width} --height {height} preview'
+    if platform.system() == 'Windows':
+        transform = 'scale=320:240,transpose=2,crop=200:280:20:40'
+        cmd = 'ffmpeg -f dshow -i video="{camera_input}"'
+
+        #cmd += ' -filter_complex "scale=320:240,transpose=2,crop=200:280:20:40'
+        #cmd += ',colorkey=0x5A8C5A:0.9:0.2'
+        #cmd += '"'
+        x = 60
+        y = 150
+        w = 260
+        h = 490
+
+        transform = 'transpose=2'
+        colorkey ='colorkey=0x0DED15:0.5:0.05'
+        grid = 'drawgrid=width=100:height=100:thickness=1:color=gray'
+        box = "drawbox=x={}:y={}:w={}:h={}:color=blue@0.5".format(x, y, w, h)
+        crop = "crop=x={}:y={}:w={}:h={}".format(x, y, w, h)
+
+
+        #cmd = 'ffmpeg -y -f dshow -t 4 -i video="{camera_input}" -s {width}x{height} -vf "crop=200:280:20:0,transpose=2" preview.avi'
+        if args.stream:
+            # Stream
+            cmd += ' -f lavfi -i color=c=red:size=640x480'
+            cmd += ' -filter_complex "[0:v]{colorkey}[ckout];[1:v][ckout]overlay,{transform},{grid},{box}[out]" -map "[out]"' \
+                            .format(transform=transform, colorkey=colorkey, grid=grid, box=box)
+            url = 'udp://127.0.0.1:1234'
+            cmd += ' -vcodec libx264 -tune zerolatency -b 900k -bufsize 3000k -f mpegts ' + url
+        else:
+            # Save to file
+            cmd += ' -filter_complex "{colorkey},{transform},{crop}"' \
+                            .format(transform=transform, colorkey=colorkey, crop=crop)
+            #cmd += ' -y -t 4 preview.avi'
+            cmd += ' -y -t 4 -r 7 "frames/preview%4d.png"'
+    else:
+        cmd = 'wacaw -d {camera_input} -i {camera_input} --video --duration 4 --width {width} --height {height} preview'
     local(cmd.format(width=w, height=h, **settings))
 
 
@@ -65,16 +119,23 @@ def split_video_to_frames():
 
 
 def remove_green_from_frames():
-    for filename in glob.glob('frames/*.png'):
-        local('python remove_green.py "%s"' % filename)
-        cmd = 'convert -rotate {rotate} -gravity South '
+    p = Pool(8)
+    p.map(remove_green_from_frame, glob.glob('frames/*.png'))
 
-        if settings['crop'] is not None:
-            cmd += '-crop {crop} '
+def remove_green_from_frame(filename):
+    t0 = time.clock()
+    local('python remove_green.py "%s"' % filename)
+    print "Removing green took " + str(time.clock() - t0)
 
-        cmd += '%s %s' % (filename, filename)
-        local(cmd.format(**settings))
+    cmd = 'convert -rotate {rotate} -gravity South '
 
+    if settings['crop'] is not None:
+        cmd += '-crop {crop} '
+
+    cmd += '%s %s' % (filename, filename)
+    t0 = time.clock()
+    #local(cmd.format(**settings))
+    print "Crop+rotate took " + str(time.clock() - t0)
 
 def create_gif():
     cmd = 'convert ' \

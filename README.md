@@ -80,3 +80,8 @@ Install Python dependencies. This is recommended to do inside a virtualenv.
     sudo ln -s /usr/lib/x86_64-linux-gnu/libz.so /usr/lib
 
     sudo pip install -r requirements.txt
+
+ # Installing on Windows
+
+Download and install [python](http://python.org) and add it to your PATH.
+Download and install [ffmpeg](http://ffmpeg.org) and add it to your PATH.

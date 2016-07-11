@@ -145,7 +145,7 @@ def file_response(request_path, start_response):
     if content is not None:
         content_type = mimetypes.guess_type(path)[0]
         headers = HEADERS[:]
-        headers.append(('Content-Type', content_type))
+        headers.append(('Content-Type', str(content_type)))
         start_response('200 OK', headers)
         return [content]
 
