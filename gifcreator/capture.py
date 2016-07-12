@@ -50,6 +50,10 @@ def main():
     parser = ArgumentParser(description='capture camera stream and convert to gif')
     parser.add_argument('--stream', action='store_true',
                         help='stream processed video instead of converting to gif')
+    parser.add_argument('--green', action='store_true',
+                        help='use green screen')
+    parser.add_argument('--white', action='store_true',
+                        help='use white screen')
     global args
     args = parser.parse_args()
 
@@ -75,41 +79,47 @@ def clean():
 
 def capture_video():
     w, h = settings['output_size'].split('x')
+    cmd = ''
     if platform.system() == 'Windows':
-        transform = 'scale=320:240,transpose=2,crop=200:280:20:40'
+        #transform = 'scale=320:240,transpose=2,crop=200:280:20:40'
         cmd = 'ffmpeg -f dshow -i video="{camera_input}"'
+    elif platform.system() == 'Linux':
+        cmd = 'ffmpeg -f v4l2 -i /dev/video0'
+    elif platform.system() == 'Darwin':
+        cmd = 'ffmpeg -f avfoundation -i "default"'
 
-        #cmd += ' -filter_complex "scale=320:240,transpose=2,crop=200:280:20:40'
-        #cmd += ',colorkey=0x5A8C5A:0.9:0.2'
-        #cmd += '"'
-        x = 60
-        y = 150
-        w = 260
-        h = 490
+    #cmd += ' -filter_complex "scale=320:240,transpose=2,crop=200:280:20:40'
+    #cmd += ',colorkey=0x5A8C5A:0.9:0.2'
+    #cmd += '"'
+    x = 60
+    y = 150
+    w = 260
+    h = 490
 
-        transform = 'transpose=2'
-        colorkey ='colorkey=0x0DED15:0.5:0.05'
-        grid = 'drawgrid=width=100:height=100:thickness=1:color=gray'
-        box = "drawbox=x={}:y={}:w={}:h={}:color=blue@0.5".format(x, y, w, h)
-        crop = "crop=x={}:y={}:w={}:h={}".format(x, y, w, h)
-
-
-        #cmd = 'ffmpeg -y -f dshow -t 4 -i video="{camera_input}" -s {width}x{height} -vf "crop=200:280:20:0,transpose=2" preview.avi'
-        if args.stream:
-            # Stream
-            cmd += ' -f lavfi -i color=c=red:size=640x480'
-            cmd += ' -filter_complex "[0:v]{colorkey}[ckout];[1:v][ckout]overlay,{transform},{grid},{box}[out]" -map "[out]"' \
-                            .format(transform=transform, colorkey=colorkey, grid=grid, box=box)
-            url = 'udp://127.0.0.1:1234'
-            cmd += ' -vcodec libx264 -tune zerolatency -b 900k -bufsize 3000k -f mpegts ' + url
-        else:
-            # Save to file
-            cmd += ' -filter_complex "{colorkey},{transform},{crop}"' \
-                            .format(transform=transform, colorkey=colorkey, crop=crop)
-            #cmd += ' -y -t 4 preview.avi'
-            cmd += ' -y -t 4 -r 7 "frames/preview%4d.png"'
+    transform = 'transpose=2'
+    if args.white:
+        colorkey ='colorkey=0xFFFFFF:0.4:0.05'
     else:
-        cmd = 'wacaw -d {camera_input} -i {camera_input} --video --duration 4 --width {width} --height {height} preview'
+        colorkey ='chromakey=0x0DED15:0.5:0.05'
+    grid = 'drawgrid=width=100:height=100:thickness=1:color=gray'
+    box = "drawbox=x={}:y={}:w={}:h={}:color=blue@0.5".format(x, y, w, h)
+    crop = "crop=x={}:y={}:w={}:h={}".format(x, y, w, h)
+
+
+    #cmd = 'ffmpeg -y -f dshow -t 4 -i video="{camera_input}" -s {width}x{height} -vf "crop=200:280:20:0,transpose=2" preview.avi'
+    if args.stream:
+        # Stream
+        cmd += ' -f lavfi -i color=c=red:size=640x480'
+        cmd += ' -filter_complex "[0:v]{colorkey}[ckout];[1:v][ckout]overlay,{transform},{grid},{box}[out]" -map "[out]"' \
+                        .format(transform=transform, colorkey=colorkey, grid=grid, box=box)
+        url = 'udp://127.0.0.1:1234'
+        cmd += ' -vcodec libx264 -tune zerolatency -b 900k -bufsize 3000k -f mpegts ' + url
+    else:
+        # Save to file
+        cmd += ' -filter_complex "{colorkey},{transform},{crop}"' \
+                        .format(transform=transform, colorkey=colorkey, crop=crop)
+        #cmd += ' -y -t 4 preview.avi'
+        cmd += ' -y -t 4 -r 7 "frames/preview%4d.png"'
     local(cmd.format(width=w, height=h, **settings))
 
 
