@@ -91,16 +91,16 @@ def capture_video():
     #cmd += ' -filter_complex "scale=320:240,transpose=2,crop=200:280:20:40'
     #cmd += ',colorkey=0x5A8C5A:0.9:0.2'
     #cmd += '"'
-    x = 60
-    y = 150
-    w = 260
-    h = 490
+    x = 160
+    y = 40
+    w = 340
+    h = 400
 
-    transform = 'transpose=2'
+    transform = ''#',transpose=2'
     if args.white:
         colorkey ='colorkey=0xFFFFFF:0.4:0.05'
     else:
-        colorkey ='chromakey=0x0DED15:0.5:0.05'
+        colorkey ='chromakey=0x00BD84:0.2:0.10'
     grid = 'drawgrid=width=100:height=100:thickness=1:color=gray'
     box = "drawbox=x={}:y={}:w={}:h={}:color=blue@0.5".format(x, y, w, h)
     crop = "crop=x={}:y={}:w={}:h={}".format(x, y, w, h)
@@ -111,13 +111,13 @@ def capture_video():
     if args.stream:
         # Stream
         cmd += ' -f lavfi -i color=c=red:size=640x480'
-        cmd += ' -filter_complex "[0:v]{colorkey}[ckout];[1:v][ckout]overlay,{transform},{grid},{box}[out]" -map "[out]"' \
+        cmd += ' -filter_complex "[0:v]{colorkey}[ckout];[1:v][ckout]overlay{transform},{grid},{box}[out]" -map "[out]"' \
                         .format(transform=transform, colorkey=colorkey, grid=grid, box=box)
         url = 'udp://127.0.0.1:1234'
         cmd += ' -vcodec libx264 -tune zerolatency -b 900k -bufsize 3000k -f mpegts ' + url
     else:
         # Save to file
-        cmd += ' -filter_complex "{colorkey},{transform},{crop}{skip}"' \
+        cmd += ' -filter_complex "{colorkey}{transform},{crop}{skip}"' \
                         .format(transform=transform, colorkey=colorkey, crop=crop, skip=skip)
         #cmd += ' -y -t 4 preview.avi'
         cmd += ' -y -t 4 -r 7 "frames/preview%4d.png"'
