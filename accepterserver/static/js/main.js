@@ -89,6 +89,20 @@ function startCountDown() {
 
         var timer = setTimeout(function() {
             showView('countdown3-view');
+        }, 1000);
+        timers.push(timer);
+
+        timer = setTimeout(function() {
+            showView('countdown2-view');
+        }, 2000);
+        timers.push(timer);
+
+        timer = setTimeout(function() {
+            showView('countdown1-view');
+        }, 3000);
+        timers.push(timer);
+
+        timer = setTimeout(function() {
             getGif(function(data) {
                 if (!data) {
                     showErrorAndReload();
@@ -111,18 +125,7 @@ function startCountDown() {
                 };
                 img.src = '/static/img/preview.gif';
             });
-        }, 1000);
-        timers.push(timer);
-
-        timer = setTimeout(function() {
-            showView('countdown2-view');
-        }, 2000);
-        timers.push(timer);
-
-        timer = setTimeout(function() {
-            showView('countdown1-view');
-
-        }, 3000);
+        }, 4000);
         timers.push(timer);
 
         timer = setTimeout(function() {
