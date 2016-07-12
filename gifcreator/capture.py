@@ -104,6 +104,7 @@ def capture_video():
     grid = 'drawgrid=width=100:height=100:thickness=1:color=gray'
     box = "drawbox=x={}:y={}:w={}:h={}:color=blue@0.5".format(x, y, w, h)
     crop = "crop=x={}:y={}:w={}:h={}".format(x, y, w, h)
+    skip = ',select=gte(n\,2)'
 
 
     #cmd = 'ffmpeg -y -f dshow -t 4 -i video="{camera_input}" -s {width}x{height} -vf "crop=200:280:20:0,transpose=2" preview.avi'
@@ -116,8 +117,8 @@ def capture_video():
         cmd += ' -vcodec libx264 -tune zerolatency -b 900k -bufsize 3000k -f mpegts ' + url
     else:
         # Save to file
-        cmd += ' -filter_complex "{colorkey},{transform},{crop}"' \
-                        .format(transform=transform, colorkey=colorkey, crop=crop)
+        cmd += ' -filter_complex "{colorkey},{transform},{crop}{skip}"' \
+                        .format(transform=transform, colorkey=colorkey, crop=crop, skip=skip)
         #cmd += ' -y -t 4 preview.avi'
         cmd += ' -y -t 4 -r 7 "frames/preview%4d.png"'
     local(cmd.format(width=w, height=h, **settings))
