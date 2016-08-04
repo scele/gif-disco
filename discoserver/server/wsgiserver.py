@@ -172,6 +172,14 @@ def main_app(env, start_response):
         start_response('200 OK', [])
         return [json.dumps({"background": background})]
 
+    elif request_path == '/backgrounds':
+        gifs = ['img/gifs/' + file for file in os.listdir(path.get_resource("static/img/gifs")) if file.endswith(".gif")]
+        start_response('200 OK', [])
+        return json.dumps({
+            'backgrounds': read_json(BACKGROUNDS_PATH),
+            'gifs': gifs 
+        })
+
     # Serve a file if it's found.
     else:
         if request_path == '/':

@@ -10,26 +10,40 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-var Comment = React.createClass({
-  rawMarkup: function() {
-    var md = new Remarkable();
-    var rawMarkup = md.render(this.props.children.toString());
-    return { __html: rawMarkup };
-  },
+import React, { Component } from 'react';
+import ReactDOM from 'react-dom';
+import ResizableAndMovable from 'react-resizable-and-movable';
 
-  render: function() {
+class Dancer extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { x: 20, y: 20, height: 200, width: 100 };
+  }
+  resize(direction, styleSize, clientSize, delta) {
+      //this.setState({ width: styleSize.height, height: styleSize.height });
+  }
+  render() {
     return (
-      <div className="comment">
-        <h2 className="commentAuthor">
-          {this.props.author}
-        </h2>
-        <span dangerouslySetInnerHTML={this.rawMarkup()} />
-      </div>
+      <ResizableAndMovable
+        x={this.state.x}
+        y={this.state.y}
+        height={this.state.height}
+        width={this.state.width}
+        onResize={this.resize.bind(this)}
+        canUpdateSizeByParent={true}
+        minWidth={100}
+        minHeight={100}
+        isResizable={{ top:true, right:false, bottom:true, left:false, topRight:false, bottomRight:false, bottomLeft:false, topLeft:false }}
+        bounds={'parent'}
+        className="dancer"
+      >
+        <img src={this.props.src} />
+     </ResizableAndMovable>
     );
   }
-});
+}
 
-var CommentBox = React.createClass({
+var Scene = React.createClass({
   loadCommentsFromServer: function() {
     $.ajax({
       url: this.props.url,
@@ -80,78 +94,20 @@ var CommentBox = React.createClass({
     var gifs = this.state.gifs;
     var dancers = bg.gifs.map(function(place, i) {
       return (
-        <img className="dancer" src={gifs[i]} key={i} style={{left:"-5%", bottom: "5%"}} height="50%" />
+        <Dancer key={i} src={gifs[i]} />
       );
     });
 
     return (
       <div className="scene">
-        <img className="bg" src={bg.url} />
         {dancers}
+        <img className="bg" src={bg.url} />
       </div>
-    );
-  }
-});
-
-var CommentList = React.createClass({
-  render: function() {
-    var commentNodes = this.props.data.map(function(comment) {
-      return (
-        <Comment author={comment.author} key={comment.id}>
-          {comment.text}
-        </Comment>
-      );
-    });
-    return (
-      <div className="commentList">
-        {commentNodes}
-      </div>
-    );
-  }
-});
-
-var CommentForm = React.createClass({
-  getInitialState: function() {
-    return {author: '', text: ''};
-  },
-  handleAuthorChange: function(e) {
-    this.setState({author: e.target.value});
-  },
-  handleTextChange: function(e) {
-    this.setState({text: e.target.value});
-  },
-  handleSubmit: function(e) {
-    e.preventDefault();
-    var author = this.state.author.trim();
-    var text = this.state.text.trim();
-    if (!text || !author) {
-      return;
-    }
-    this.props.onCommentSubmit({author: author, text: text});
-    this.setState({author: '', text: ''});
-  },
-  render: function() {
-    return (
-      <form className="commentForm" onSubmit={this.handleSubmit}>
-        <input
-          type="text"
-          placeholder="Your name"
-          value={this.state.author}
-          onChange={this.handleAuthorChange}
-        />
-        <input
-          type="text"
-          placeholder="Say something..."
-          value={this.state.text}
-          onChange={this.handleTextChange}
-        />
-        <input type="submit" value="Post" />
-      </form>
     );
   }
 });
 
 ReactDOM.render(
-  <CommentBox url="/backgrounds" pollInterval={2000} />,
-  document.getElementById('content')
+  <Scene url="/backgrounds" pollInterval={2000} />,
+  document.querySelector('#content')
 );
